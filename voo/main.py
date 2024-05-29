@@ -8,10 +8,19 @@ import datetime
 NUM_DAYS = 100
 NUM_ATTENDANTS = 3
 AVG_PASSENGERS_PER_DAY = 10
-AVG_SERVICE_TIME = 3  # horas
+AVG_SERVICE_TIME = 3 
 
 # Função para gerar a chegada de passageiros com base na distribuição normal
 def generate_passenger_arrivals(env, num_days, avg_passengers_per_day, passenger_arrivals):
+    """
+    Gera a chegada de passageiros ao longo dos dias da simulação.
+
+    Parameters:
+    env (simpy.Environment): O ambiente de simulação.
+    num_days (int): O número de dias para simular.
+    avg_passengers_per_day (int): O número médio de passageiros por dia.
+    passenger_arrivals (list): Lista para armazenar os tempos de chegada dos passageiros.
+    """
     for day in range(num_days):
         num_passengers = max(0, int(np.random.normal(avg_passengers_per_day, 2)))  # Gerando número de passageiros
         for i in range(num_passengers):
@@ -19,41 +28,59 @@ def generate_passenger_arrivals(env, num_days, avg_passengers_per_day, passenger
             current_time = env.now  # Tempo atual da simulação
             # Adicionando tempo de chegada no formato de hora e minuto
             passenger_arrivals.append(current_time + day * 24 + arrival_time)
-            yield env.timeout(arrival_time)  # Simulate passage of time until next arrival
+            yield env.timeout(arrival_time)  # Simula o tempo de passagem até a próxima chegada
             env.process(passenger(env, current_time + day * 24 + arrival_time))
 
 # Função para modelar o atendimento de passageiros
 def passenger(env, arrival_time):
+    """
+    Modela o atendimento de um passageiro.
+
+    Parameters:
+    env (simpy.Environment): O ambiente de simulação.
+    arrival_time (float): O tempo de chegada do passageiro.
+    """
     if attendants is not None:
-        with attendants.request() as request:  # Request an attendant
-            yield request | env.timeout(0)  # Immediate check for available attendant
-            if request.triggered:  # If attendant is available
+        with attendants.request() as request:  # Faz o request de um atendente
+            yield request | env.timeout(0)  # Verifica se possui algum atendente disponível
+            if request.triggered:  # Se o atendente estiver disponível
                 start_service = env.now
                 service_time = max(0, np.random.normal(AVG_SERVICE_TIME, 1))  # Tempo de serviço variado
-                yield env.timeout(service_time)  # Simulate the service time
+                yield env.timeout(service_time)  # Simula o tempo de serviço
                 end_service = env.now
                 attended_passengers.append((
                     arrival_time, start_service, end_service)
-                )  # Log attended passenger
-            else:  # If no attendant is available
-                denied_passengers.append(arrival_time)  # Log denied passenger
+                )  # Registrar passageiro atendido    
+            else:  # Se não houver atendente disponível
+                denied_passengers.append(arrival_time)  # Registrar passageiro negado
     else:
-        denied_passengers.append(arrival_time)  # If no attendants, deny passenger
+        denied_passengers.append(arrival_time)  # Se não há atendentes, o passageiro é negado
 
 def run_simulation(num_days, num_attendants, avg_passengers_per_day):
+    """
+    Executa a simulação de atendimento de passageiros.
+
+    Parameters:
+    num_days (int): O número de dias para simular.
+    num_attendants (int): O número de atendentes disponíveis.
+    avg_passengers_per_day (int): O número médio de passageiros por dia.
+
+    Returns:
+    tuple: DataFrames de passageiros atendidos e negados, e a taxa de utilização dos atendentes.
+    """
     global attendants, attended_passengers, denied_passengers
     attended_passengers = []
     denied_passengers = []
     env = simpy.Environment()
     attendants = simpy.Resource(
         env, capacity=num_attendants
-        ) if num_attendants > 0 else None  # Initialize resources (attendants)
+        ) if num_attendants > 0 else None  # Inicializa os recursos (attendants)
     passenger_arrivals = []
     env.process(generate_passenger_arrivals(
         env, num_days, 
         avg_passengers_per_day, passenger_arrivals)
         )
-    env.run(until=num_days * 24)  # Run the simulation
+    env.run(until=num_days * 24)  # Roda a simulação
 
     current_date = datetime.datetime.utcnow()  # Obter o tempo atual em UTC
 
@@ -86,7 +113,7 @@ def run_simulation(num_days, num_attendants, avg_passengers_per_day):
     
     return attended_df, denied_df, utilization
 
-# Streamlit interface
+# Interface do Streamlit
 st.title("Simulação de Atendimento de Passageiros")
 num_days = st.slider("Número de dias", 10, 365, 100)
 num_attendants = st.slider("Número de atendentes", 0, 10, 3)
